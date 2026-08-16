@@ -42,7 +42,7 @@ public class BaldrCli implements Callable<Integer> {
     @Option(names = {"-o", "--output"}, description = "报告输出文件路径，默认打印到控制台")
     private String output;
 
-    @Option(names = {"--local"}, description = "使用本地大模型；默认 false，即使用云端 provider")
+    @Option(names = {"--local"}, description = "使用本地私有模型（Ollama/vLLM 等 OpenAI 兼容服务）；配合 --endpoint --model 使用")
     private boolean useLocal = false;
 
     @Option(names = {"--provider"}, description = "云端大模型 provider：deepseek / doubao / joyai，默认 deepseek")

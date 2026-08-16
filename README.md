@@ -56,7 +56,7 @@ java -jar baldr.jar --pid <PID> --duration 60 --output report.md
 | `--api-key` | | API Key，默认读取对应 provider 的环境变量 | - |
 | `--endpoint` | | 自定义 API endpoint | provider 内置 |
 | `--model` | | 模型名 | provider 内置 |
-| `--local` | | 使用本地大模型（暂未实现） | `false` |
+| `--local` | | 使用本地私有模型（Ollama/vLLM 等 OpenAI 兼容服务） | `false` |
 | `--help` | `-h` | 查看帮助 | - |
 | `--version` | `-V` | 查看版本 | - |
 
@@ -90,6 +90,36 @@ export JOYAI_ENDPOINT=https://<真实地址>/chat/completions
 export JOYAI_API_KEY=xxxx
 java -jar baldr.jar --pid <PID> --provider joyai --model <模型名>
 ```
+
+### 本地私有模型（离线 / 内网）
+
+适用于对数据隐私、合规有要求的场景——模型部署在本地或内网，数据不出网。支持任意 OpenAI 兼容的本地推理服务（Ollama、vLLM、LM Studio、LocalAI 等）。
+
+使用 `--local` 开关，默认指向 Ollama（`http://localhost:11434/v1/chat/completions`）：
+
+```bash
+# Ollama 示例（先 ollama pull qwen2.5-coder 并启动服务）
+java -jar baldr.jar --pid <PID> --local --model qwen2.5-coder
+
+# vLLM / LM Studio 等：用 --endpoint 指定地址
+java -jar baldr.jar --pid <PID> --local \
+  --endpoint http://localhost:8000/v1/chat/completions \
+  --model your-local-model
+
+# 也可用环境变量配置，命令更简洁
+export LOCAL_LLM_ENDPOINT=http://localhost:11434/v1/chat/completions
+java -jar baldr.jar --pid <PID> --local --model qwen2.5-coder
+```
+
+本地服务通常无需 API Key；若你的服务开启了鉴权，通过 `--api-key` 或环境变量 `LOCAL_LLM_API_KEY` 传入。
+
+| 本地服务 | 默认 endpoint |
+| --- | --- |
+| Ollama | `http://localhost:11434/v1/chat/completions` |
+| vLLM | `http://localhost:8000/v1/chat/completions` |
+| LM Studio | `http://localhost:1234/v1/chat/completions` |
+
+> 提示：本地模型需支持 JSON 输出能力（`response_format`）以获得最佳结构化诊断效果；能力较弱的模型可能触发降级为纯文本摘要。
 
 ### 使用自定义 OpenAI 兼容服务
 

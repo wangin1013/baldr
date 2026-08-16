@@ -53,11 +53,13 @@ public final class LLMProviderFactory {
                 return new DoubaoProvider(apiKey, endpoint, model, connectTimeoutMs, readTimeoutMs);
             case JoyAiProvider.NAME:
                 return new JoyAiProvider(apiKey, endpoint, model, connectTimeoutMs, readTimeoutMs);
+            case LocalProvider.NAME:
+                return new LocalProvider(apiKey, endpoint, model, connectTimeoutMs, readTimeoutMs);
             default:
                 throw new IllegalArgumentException(
                         "不支持的大模型 provider: " + provider
                                 + "，可选值: " + DeepSeekProvider.NAME + " / " + DoubaoProvider.NAME
-                                + " / " + JoyAiProvider.NAME);
+                                + " / " + JoyAiProvider.NAME + " / " + LocalProvider.NAME);
         }
     }
 }

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.wh.baldr.core.analyzer.provider.LLMProvider;
 import com.wh.baldr.core.analyzer.provider.LLMProviderFactory;
+import com.wh.baldr.core.analyzer.provider.LocalProvider;
 import com.wh.baldr.core.model.CallTreeNode;
 import com.wh.baldr.core.model.DiagnosisResult;
 import com.wh.baldr.core.model.ProfileReport;
@@ -116,7 +117,7 @@ public class AIDiagnosis {
     public static DiagnosisResult diagnose(String prompt, boolean useLocalLLM, String provider,
                                            String apiKey, String endpoint, String model) throws Exception {
         if (useLocalLLM) {
-            return callLocalLLM(prompt);
+            return callLocalLLM(prompt, apiKey, endpoint, model);
         }
         return callCloudLLM(prompt, provider, apiKey, endpoint, model);
     }
@@ -136,10 +137,17 @@ public class AIDiagnosis {
         return diagnose(prompt, useLocalLLM, null, null, null, null);
     }
 
-    private static DiagnosisResult callLocalLLM(String prompt) throws Exception {
-        // TODO 调用本地 vLLM/Qwen2.5-Coder，暂未实现
-        log.warn("本地大模型尚未实现，返回空诊断结果");
-        return null;
+    /**
+     * 调用本地私有大模型（Ollama / vLLM / LM Studio 等 OpenAI 兼容服务），
+     * 并将返回的 JSON 解析为 {@link DiagnosisResult}。
+     */
+    private static DiagnosisResult callLocalLLM(String prompt, String apiKey,
+                                                String endpoint, String model) throws Exception {
+        LLMProvider llm = LLMProviderFactory.create(LocalProvider.NAME, apiKey, endpoint, model);
+        log.info("{} 诊断请求 {} 字符", llm.name(), prompt == null ? 0 : prompt.length());
+        String json = llm.chatJson(SYSTEM_PROMPT, prompt);
+        log.info("{} 诊断返回 {} 字符", llm.name(), json == null ? 0 : json.length());
+        return parseDiagnosis(json);
     }
 
     /**

@@ -50,11 +50,11 @@ public abstract class OpenAiCompatibleProvider implements LLMProvider {
         String key = (apiKey == null || apiKey.trim().isEmpty())
                 ? System.getenv(envApiKeyName())
                 : apiKey;
-        if (key == null || key.trim().isEmpty()) {
+        if ((key == null || key.trim().isEmpty()) && requireApiKey()) {
             throw new IllegalArgumentException(
                     brand() + " API Key 未提供，请通过参数或环境变量 " + envApiKeyName() + " 设置");
         }
-        this.apiKey = key.trim();
+        this.apiKey = key == null ? "" : key.trim();
         this.endpoint = (endpoint == null || endpoint.trim().isEmpty()) ? defaultEndpoint() : endpoint;
         this.model = (model == null || model.trim().isEmpty()) ? defaultModel() : model;
         this.connectTimeoutMs = connectTimeoutMs;
@@ -74,6 +74,15 @@ public abstract class OpenAiCompatibleProvider implements LLMProvider {
 
     /** 品牌名称，用于错误提示文案，如 "DeepSeek"、"JoyAI"。 */
     protected abstract String brand();
+
+    /**
+     * 是否强制要求 API Key。默认 true；本地私有服务（无需鉴权）可覆写为 false。
+     *
+     * @return 是否强制要求 API Key
+     */
+    protected boolean requireApiKey() {
+        return true;
+    }
 
     // ---- 通用实现 ----
 
@@ -126,7 +135,9 @@ public abstract class OpenAiCompatibleProvider implements LLMProvider {
             conn.setConnectTimeout(connectTimeoutMs);
             conn.setReadTimeout(readTimeoutMs);
             conn.setRequestProperty("Content-Type", "application/json");
-            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            if (apiKey != null && !apiKey.isEmpty()) {
+                conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            }
 
             try (OutputStream os = conn.getOutputStream()) {
                 os.write(payload.getBytes(StandardCharsets.UTF_8));
