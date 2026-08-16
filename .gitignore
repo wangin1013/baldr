@@ -1,0 +1,29 @@
+# Maven 构建产物
+target/
+dependency-reduced-pom.xml
+*.jar.original
+
+# AI 助手私有上下文
+.joycode/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志与临时文件
+*.log
+/tmp/
+baldr-ai/
+
+# 大文件产物（如需版本化 Arthas 发行包，请单独处理）
+# 注：baldr-core/src/main/resources/baldr-arthas/arthas-bin.zip 为必需资源，不忽略
