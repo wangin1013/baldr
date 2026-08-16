@@ -18,7 +18,7 @@ public final class LLMProviderFactory {
     /**
      * 按名称创建 provider（使用默认超时）。
      *
-     * @param provider provider 名称，如 {@code deepseek}、{@code joyai}；为空时用默认
+     * @param provider provider 名称，如 {@code deepseek}、{@code doubao}；为空时用默认
      * @param apiKey   API Key，可为 null 由各 provider 的环境变量提供
      * @param endpoint 自定义 endpoint，可为 null 使用 provider 默认
      * @param model    模型名，可为 null 使用 provider 默认
@@ -51,15 +51,13 @@ public final class LLMProviderFactory {
                 return new DeepSeekProvider(apiKey, endpoint, model, connectTimeoutMs, readTimeoutMs);
             case DoubaoProvider.NAME:
                 return new DoubaoProvider(apiKey, endpoint, model, connectTimeoutMs, readTimeoutMs);
-            case JoyAiProvider.NAME:
-                return new JoyAiProvider(apiKey, endpoint, model, connectTimeoutMs, readTimeoutMs);
             case LocalProvider.NAME:
                 return new LocalProvider(apiKey, endpoint, model, connectTimeoutMs, readTimeoutMs);
             default:
                 throw new IllegalArgumentException(
                         "不支持的大模型 provider: " + provider
                                 + "，可选值: " + DeepSeekProvider.NAME + " / " + DoubaoProvider.NAME
-                                + " / " + JoyAiProvider.NAME + " / " + LocalProvider.NAME);
+                                + " / " + LocalProvider.NAME);
         }
     }
 }

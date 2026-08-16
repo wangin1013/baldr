@@ -4,7 +4,7 @@ import java.io.IOException;
 
 /**
  * 大模型 Provider 抽象。
- * 不同厂商（DeepSeek / JoyAI / 本地模型等）实现本接口，
+ * 不同厂商（DeepSeek / 豆包 / 本地模型等）实现本接口，
  * 屏蔽各自的鉴权、请求/响应格式差异，对上层提供统一的对话补全能力。
  *
  * @author rubant
@@ -13,7 +13,7 @@ import java.io.IOException;
 public interface LLMProvider {
 
     /**
-     * Provider 的唯一名称（小写），用于工厂按名选择，如 {@code deepseek}、{@code joyai}。
+     * Provider 的唯一名称（小写），用于工厂按名选择，如 {@code deepseek}、{@code doubao}。
      *
      * @return provider 名称
      */

@@ -21,7 +21,7 @@ import lombok.extern.slf4j.Slf4j;
  * 封装 Chat Completions API 的通用逻辑——请求体构造、Bearer 鉴权、
  * JSON 输出模式、响应解析、错误提示，使用 JDK 原生 {@link HttpURLConnection}，无第三方 HTTP 依赖。
  *
- * <p>DeepSeek、JoyAI 等采用 OpenAI 兼容接口的厂商均可继承本类，
+ * <p>DeepSeek、豆包 等采用 OpenAI 兼容接口的厂商均可继承本类，
  * 只需通过构造参数提供各自的 endpoint、model、API Key 与品牌信息。</p>
  *
  * @author rubant
@@ -72,7 +72,7 @@ public abstract class OpenAiCompatibleProvider implements LLMProvider {
     /** 读取 API Key 的环境变量名。 */
     protected abstract String envApiKeyName();
 
-    /** 品牌名称，用于错误提示文案，如 "DeepSeek"、"JoyAI"。 */
+    /** 品牌名称，用于错误提示文案，如 "DeepSeek"、"豆包"。 */
     protected abstract String brand();
 
     /**

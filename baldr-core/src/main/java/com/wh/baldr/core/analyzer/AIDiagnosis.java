@@ -107,7 +107,7 @@ public class AIDiagnosis {
      *
      * @param prompt      用户提示词
      * @param useLocalLLM 是否使用本地大模型；false 时走云端 provider
-     * @param provider    云端 provider 名称，如 deepseek / joyai；为空用默认
+     * @param provider    云端 provider 名称，如 deepseek / doubao；为空用默认
      * @param apiKey      API Key，可传 null 由对应 provider 的环境变量提供
      * @param endpoint    自定义 endpoint，可为 null 使用 provider 默认
      * @param model       模型名，可为 null 使用 provider 默认

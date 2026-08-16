@@ -8,7 +8,7 @@ Baldr 内嵌 Arthas + async-profiler，对目标 JVM 进行 CPU / 内存 / 锁�
 
 - **零安装采样**：内嵌 Arthas 与 async-profiler，无需在目标机预装任何工具。
 - **AI 智能诊断**：接入多家大模型，自动分析 CPU 热点、调用链，输出根因、优化方案与示例代码。
-- **多 Provider 架构**：内置 DeepSeek、豆包（火山方舟），并预留 JoyAI，可通过参数自由切换。
+- **多 Provider 架构**：内置 DeepSeek、豆包（火山方舟）与本地私有模型，可通过参数自由切换。
 - **纯净输出**：自动屏蔽 JVM / async-profiler 的底层告警噪音（ByteBuddy 动态 Agent、CDS Sharing、framebuf 等）。
 - **优雅降级**：AI 调用失败时仍照常输出性能热点数据，不影响采样结果。
 - **单文件分发**：产物为一个 fat jar，`java -jar` 即可运行。
@@ -52,7 +52,7 @@ java -jar baldr.jar --pid <PID> --duration 60 --output report.md
 | `--duration` | `-d` | 采样时长（秒） | `30` |
 | `--event` | `-e` | 采样事件：`cpu` / `alloc` / `lock` | `cpu` |
 | `--output` | `-o` | 报告输出文件路径，默认打印到控制台 | - |
-| `--provider` | | 云端大模型：`deepseek` / `doubao` / `joyai` | `deepseek` |
+| `--provider` | | 云端大模型：`deepseek` / `doubao` | `deepseek` |
 | `--api-key` | | API Key，默认读取对应 provider 的环境变量 | - |
 | `--endpoint` | | 自定义 API endpoint | provider 内置 |
 | `--model` | | 模型名 | provider 内置 |
@@ -79,16 +79,6 @@ export ARK_API_KEY=xxxx
 java -jar baldr.jar --pid <PID> --provider doubao
 # 默认模型 doubao-pro-32k，也可用推理接入点 ID：
 java -jar baldr.jar --pid <PID> --provider doubao --model ep-xxxxxxxx
-```
-
-### JoyAI（预留）
-
-JoyAI 的真实 endpoint 需自行提供：
-
-```bash
-export JOYAI_ENDPOINT=https://<真实地址>/chat/completions
-export JOYAI_API_KEY=xxxx
-java -jar baldr.jar --pid <PID> --provider joyai --model <模型名>
 ```
 
 ### 本地私有模型（离线 / 内网）
@@ -188,7 +178,7 @@ baldr/
 │       ├── collector/             # 性能采样收集器
 │       ├── parser/                # collapsed 格式解析、热点/调用树构建
 │       ├── analyzer/              # AI 诊断
-│       │   └── provider/          # 多大模型 Provider（DeepSeek/豆包/JoyAI）
+│       │   └── provider/          # 多大模型 Provider（DeepSeek/豆包/本地）
 │       ├── report/                # Markdown 报告生成
 │       └── model/                 # 数据模型
 ├── baldr-cli/                     # 命令行入口（打包为 fat jar）

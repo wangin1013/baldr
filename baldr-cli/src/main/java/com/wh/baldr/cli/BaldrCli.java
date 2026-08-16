@@ -45,10 +45,10 @@ public class BaldrCli implements Callable<Integer> {
     @Option(names = {"--local"}, description = "使用本地私有模型（Ollama/vLLM 等 OpenAI 兼容服务）；配合 --endpoint --model 使用")
     private boolean useLocal = false;
 
-    @Option(names = {"--provider"}, description = "云端大模型 provider：deepseek / doubao / joyai，默认 deepseek")
+    @Option(names = {"--provider"}, description = "云端大模型 provider：deepseek / doubao，默认 deepseek")
     private String provider;
 
-    @Option(names = {"--api-key"}, description = "API Key，默认读取对应 provider 的环境变量（如 DEEPSEEK_API_KEY / JOYAI_API_KEY）")
+    @Option(names = {"--api-key"}, description = "API Key，默认读取对应 provider 的环境变量（如 DEEPSEEK_API_KEY / ARK_API_KEY）")
     private String apiKey;
 
     @Option(names = {"--endpoint"}, description = "自定义 API endpoint，默认使用 provider 内置地址")
