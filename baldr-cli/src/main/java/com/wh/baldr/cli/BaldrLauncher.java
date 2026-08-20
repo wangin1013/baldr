@@ -21,7 +21,7 @@ import java.util.List;
  * 本类在真正业务逻辑执行前做一次进程自重启（self-relaunch）：
  * <ol>
  *   <li>检测当前 JVM 是否已带消除警告所需参数，若已带则直接放行；</li>
- *   <li>否则以相同 classpath、追加 {@code -XX:+EnableDynamicAgentLoading}、
+ *   <li>否则以相同 classpath、追加 {@code -XX:+EnableDynamicAgentLoading}（JDK 9+）、
  *       {@code -Xshare:off} 及重启标志，fork 一个新的 java 子进程；</li>
  *   <li>子进程的 stderr 经逐行过滤，剔除已知的 native 层警告后再输出；</li>
  *   <li>原进程等待子进程结束并以其退出码退出。</li>
@@ -35,13 +35,17 @@ final class BaldrLauncher {
     /** 重启标志：子进程带此系统属性，避免无限重启 */
     private static final String RELAUNCH_FLAG = "baldr.relaunched";
 
-    /** 需要过滤的 native 层警告行片段（兜底，正常情况下 JVM 参数已消除前几条） */
-    private static final String[] SUPPRESSED = {
+    /** JDK 9+ 特有的动态 agent 加载 / CDS 警告（兜底，正常情况下 JVM 参数已消除） */
+    private static final String[] SUPPRESSED_JDK9 = {
             "A Java agent has been loaded dynamically",
             "please run with -XX:+EnableDynamicAgentLoading",
             "please run with -Djdk.instrument.traceUsage",
             "Dynamic loading of agents will be disallowed",
-            "Sharing is only supported for boot loader classes",
+            "Sharing is only supported for boot loader classes"
+    };
+
+    /** 所有 JDK 版本均可能出现的 async-profiler native 层警告 */
+    private static final String[] SUPPRESSED_COMMON = {
             "[WARN] Unknown argument: framebuf"
     };
 
@@ -103,7 +107,9 @@ final class BaldrLauncher {
 
         List<String> command = new ArrayList<>();
         command.add(javaBin);
-        command.add("-XX:+EnableDynamicAgentLoading");
+        if (isJdk9OrLater()) {
+            command.add("-XX:+EnableDynamicAgentLoading");
+        }
         command.add("-Xshare:off");
         command.add("-D" + RELAUNCH_FLAG + "=true");
 
@@ -149,11 +155,37 @@ final class BaldrLauncher {
     }
 
     private static boolean isSuppressed(String line) {
-        for (String pattern : SUPPRESSED) {
+        for (String pattern : SUPPRESSED_COMMON) {
             if (line.contains(pattern)) {
                 return true;
             }
         }
+        if (isJdk9OrLater()) {
+            for (String pattern : SUPPRESSED_JDK9) {
+                if (line.contains(pattern)) {
+                    return true;
+                }
+            }
+        }
         return false;
+    }
+
+    /**
+     * 检测当前 JVM 是否为 JDK 9 或更高版本。
+     * JDK 9 开始支持 {@code -XX:+EnableDynamicAgentLoading} 参数，
+     * JDK 8 不识别该参数会导致 JVM 启动失败。
+     */
+    private static boolean isJdk9OrLater() {
+        try {
+            String specVersion = System.getProperty("java.specification.version");
+            // JDK 8 及之前版本格式为 "1.x"（如 "1.8"），JDK 9+ 直接为主版本号（如 "9"、"11"、"17"）
+            if (specVersion != null && specVersion.startsWith("1.")) {
+                return false;
+            }
+            return true;
+        } catch (Exception e) {
+            // 无法获取版本信息时保守地不加该参数
+            return false;
+        }
     }
 }

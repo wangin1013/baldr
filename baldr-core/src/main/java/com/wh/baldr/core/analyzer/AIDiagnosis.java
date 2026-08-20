@@ -26,9 +26,9 @@ public class AIDiagnosis {
 
     /** 系统提示词：角色设定 */
     public static final String SYSTEM_PROMPT =
-            "你是一位资深 Java 性能优化专家，拥有20年JVM调优经验。"
+            "你是一位资深 Java 性能优化专家，拥有20年JVM性能调优经验。"
                     + "请根据用户提供的arthas性能分析数据，给出具体、可落地的优化建议和代码修改方案。"
-                    + "返回的结果中，修改方案要表明修改点的引入路径，是一个markdown的文档格式，要让人清楚的知道修改哪里，怎么改。";
+                    + "返回的结果中，修改方案要表明修改点以及原因，输出结果是一个markdown的文档格式，要让人清楚的知道修改哪里，怎么改。";
 
     /**
      * 构建诊断用户 Prompt（不含角色设定，角色设定见 {@link #SYSTEM_PROMPT}）。
@@ -40,29 +40,40 @@ public class AIDiagnosis {
     public static String buildPrompt(ProfileReport report, Throwable contextException) {
         StringBuilder prompt = new StringBuilder();
 
-        // 上下文异常信息
+        // 上下文异常信息（含完整堆栈与根因）
         if (contextException != null) {
             prompt.append("【异常上下文】\n");
             prompt.append("异常类型: ").append(contextException.getClass().getName()).append("\n");
             prompt.append("异常消息: ").append(contextException.getMessage()).append("\n");
+            prompt.append("堆栈跟踪:\n");
+            for (StackTraceElement ste : contextException.getStackTrace()) {
+                prompt.append("  at ").append(ste.toString()).append("\n");
+            }
+            Throwable cause = contextException.getCause();
+            if (cause != null) {
+                prompt.append("根因: ").append(cause.getClass().getName())
+                        .append(": ").append(cause.getMessage()).append("\n");
+            }
             prompt.append("\n");
         }
 
-        // 热点分析
-        prompt.append("【CPU热点Top 10】\n");
-        if (report != null && report.getHotspots() != null) {
-            report.getHotspots().stream()
-                    .limit(10)
-                    .forEach(h -> prompt.append(String.format(
-                            "- %s: %.1f%% (%d samples)\n",
-                            h.getFunction(), h.getPercent(), h.getSamples()
-                    )));
+        // CPU 热点（全量，不截断）
+        prompt.append("【CPU热点（全量）】\n");
+        if (report != null && report.getHotspots() != null && !report.getHotspots().isEmpty()) {
+            report.getHotspots().forEach(h -> prompt.append(String.format(
+                    "- %s: %.2f%% (%d samples)\n",
+                    h.getFunction(), h.getPercent(), h.getSamples()
+            )));
+        } else {
+            prompt.append("_无热点数据_\n");
         }
 
-        // 调用树（只取关键路径）
-        prompt.append("\n【关键调用路径】\n");
-        if (report != null) {
-            prompt.append(formatCallTree(report.getCallTree(), 0, 5));
+        // 完整调用树（不限深度）
+        prompt.append("\n【完整调用树】\n");
+        if (report != null && report.getCallTree() != null) {
+            prompt.append(formatCallTree(report.getCallTree(), 0, Integer.MAX_VALUE));
+        } else {
+            prompt.append("_无调用树数据_\n");
         }
 
         // 输出要求
@@ -77,7 +88,7 @@ public class AIDiagnosis {
         prompt.append("  * solution: 具体解决方案\n");
         prompt.append("  * codeExample: 优化后的代码示例（Java）\n");
         prompt.append("  * expectedGain: 预期性能提升（如\"减少50%CPU\"）\n");
-        prompt.append("- quickWins: 可以立即执行的3个最小改动（字符串数组）\n");
+        prompt.append("- quickWins: 收益最大可以立即执行的最小改动有哪些（字符串数组）\n");
         prompt.append("- jvmTuning: 如果有JVM参数调整建议，在此列出（字符串）\n");
 
         return prompt.toString();
@@ -156,7 +167,7 @@ public class AIDiagnosis {
     private static DiagnosisResult callCloudLLM(String prompt, String provider, String apiKey,
                                                 String endpoint, String model) throws Exception {
         LLMProvider llm = LLMProviderFactory.create(provider, apiKey, endpoint, model);
-        log.info("{} 诊断请求 {} 字符", llm.name(), prompt == null ? 0 : prompt.length());
+        log.info("{} 诊断请求 {} 字符，\n", llm.name(), prompt == null ? 0 : prompt.length());
 
         String json = llm.chatJson(SYSTEM_PROMPT, prompt);
         log.info("{} 诊断返回 {} 字符", llm.name(), json == null ? 0 : json.length());

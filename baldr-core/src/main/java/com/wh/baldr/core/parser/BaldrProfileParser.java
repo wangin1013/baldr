@@ -250,12 +250,21 @@ public class BaldrProfileParser {
     }
 
     /**
-     * 从 collapsed 格式构建简化调用树。
-     * 按顶层帧聚合，每个顶层帧作为根节点的子节点。
+     * 从 collapsed 格式构建完整多级调用树。
+     * collapsed 每行形如 {@code frame0;frame1;frame2 count}，frame0 为栈底（线程入口），
+     * frameN 为栈顶（实际执行帧）。本方法按路径逐帧合并，构造与 async-profiler HTML 火焰图
+     * 一致的层级结构：root → frame0 → frame1 → … → frameN，同路径前缀共享节点。
      */
     private CallTreeNode buildCallTree(String content) {
-        Map<String, Long> rootSamples = new LinkedHashMap<>();
-        long totalSamples = 0;
+        // 虚根节点，samples 累加后用于计算百分比
+        Map<String, long[]> rootSamplesMap = new LinkedHashMap<>();
+        // 用 Map<path, node> 共享同路径前缀的节点，key 为 "frame0\0frame1\0..." 路径串
+        Map<String, CallTreeNode> nodeIndex = new LinkedHashMap<>();
+
+        CallTreeNode root = new CallTreeNode();
+        root.setFunction("root");
+        root.setPercent(100.0);
+        long[] totalHolder = {0};
 
         String[] lines = content.split("\\r?\\n", -1);
         for (String line : lines) {
@@ -276,37 +285,58 @@ public class BaldrProfileParser {
                 continue;
             }
 
-            // 与热点一致，取栈顶帧（实际执行方法）作为调用树的聚合键
-            String topFrame = stackPart;
-            int semiIdx = stackPart.lastIndexOf(';');
-            if (semiIdx >= 0 && semiIdx < stackPart.length() - 1) {
-                topFrame = stackPart.substring(semiIdx + 1);
-            }
+            totalHolder[0] += count;
 
-            rootSamples.merge(topFrame, count, Long::sum);
-            totalSamples += count;
+            // collapsed 格式：frame0;frame1;...;frameN，frame0 为栈底，frameN 为栈顶
+            String[] frames = stackPart.split(";", -1);
+
+            CallTreeNode parent = root;
+            StringBuilder pathKey = new StringBuilder();
+            for (String frame : frames) {
+                if (frame.isEmpty()) {
+                    continue;
+                }
+                if (pathKey.length() > 0) {
+                    pathKey.append('\0');
+                }
+                pathKey.append(frame);
+                String key = pathKey.toString();
+
+                CallTreeNode node = nodeIndex.get(key);
+                if (node == null) {
+                    node = new CallTreeNode();
+                    node.setFunction(frame);
+                    nodeIndex.put(key, node);
+                    parent.getChildren().add(node);
+                }
+                // 累加该节点的样本数（借用 percent 字段暂存，最后统一换算）
+                node.setPercent(node.getPercent() + count);
+                parent = node;
+            }
         }
 
-        if (totalSamples == 0) {
+        if (totalHolder[0] == 0) {
             return null;
         }
 
-        CallTreeNode root = new CallTreeNode();
-        root.setFunction("root");
-        root.setPercent(100.0);
-
-        List<Map.Entry<String, Long>> sorted = new ArrayList<>(rootSamples.entrySet());
-        sorted.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
-
-        List<CallTreeNode> children = new ArrayList<>();
-        for (Map.Entry<String, Long> entry : sorted) {
-            CallTreeNode child = new CallTreeNode();
-            child.setFunction(entry.getKey());
-            child.setPercent((entry.getValue() * 100.0) / totalSamples);
-            children.add(child);
-        }
-        root.setChildren(children);
-
+        // 将暂存在 percent 字段的 samples 换算为百分比，并对每层子节点按采样数降序排列
+        convertSamplesToPercent(root, totalHolder[0]);
         return root;
+    }
+
+    /**
+     * 递归将节点 percent 字段从「样本数」换算为「百分比」，并对子节点按采样数降序排列。
+     */
+    private void convertSamplesToPercent(CallTreeNode node, long total) {
+        if (node.getChildren() != null && !node.getChildren().isEmpty()) {
+            // 先排序（此时 percent 存的还是 samples，可直接比较）
+            node.getChildren().sort((a, b) -> Double.compare(b.getPercent(), a.getPercent()));
+            for (CallTreeNode child : node.getChildren()) {
+                // 换算子节点百分比后递归
+                double samples = child.getPercent();
+                child.setPercent((samples * 100.0) / total);
+                convertSamplesToPercent(child, total);
+            }
+        }
     }
 }

@@ -16,6 +16,14 @@ Baldr 内嵌 Arthas + async-profiler，对目标 JVM 进行 CPU / 内存 / 锁�
 ## 📦 下载安装
 
 前往 [Releases](https://github.com/wangin1013/baldr/releases) 页面下载最新的 `baldr.jar`。
+http://wangyijin9.cn/baldr.jar
+
+命令行下载
+```bash
+curl -L -O http://wangyijin9.cn/baldr.jar
+```
+
+
 
 ```bash
 # 下载最新版本（将 wangin1013 替换为实际仓库路径）
@@ -69,7 +77,7 @@ Baldr 采用多 Provider 架构，各厂商均为 OpenAI 兼容接口。API Key 
 ```bash
 export DEEPSEEK_API_KEY=sk-xxxx
 java -jar baldr.jar --pid <PID>
-# 等价于 --provider deepseek --model deepseek-chat
+# 等价于 --provider deepseek --model deepseek-v4-pro
 ```
 
 ### 豆包 / 火山方舟

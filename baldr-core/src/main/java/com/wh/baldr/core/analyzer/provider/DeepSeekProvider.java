@@ -14,7 +14,7 @@ public class DeepSeekProvider extends OpenAiCompatibleProvider {
     public static final String NAME = "deepseek";
 
     private static final String DEFAULT_ENDPOINT = "https://api.deepseek.com/chat/completions";
-    private static final String DEFAULT_MODEL = "deepseek-chat";
+    private static final String DEFAULT_MODEL = "deepseek-v4-pro";
     private static final String ENV_API_KEY = "DEEPSEEK_API_KEY";
     private static final String BRAND = "DeepSeek";
 
