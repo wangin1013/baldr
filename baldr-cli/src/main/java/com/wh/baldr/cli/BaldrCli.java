@@ -26,7 +26,7 @@ import picocli.CommandLine.Option;
  */
 @Command(name = "baldr",
         mixinStandardHelpOptions = true,
-        version = "baldr 1.0.0",
+        version = "baldr 1.0.1",
         description = "采集目标进程性能数据，经大模型分析生成性能报告")
 public class BaldrCli implements Callable<Integer> {
 
