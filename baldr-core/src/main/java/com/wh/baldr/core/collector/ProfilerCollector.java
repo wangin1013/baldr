@@ -56,7 +56,7 @@ public class ProfilerCollector {
             dir = System.getenv("BALDR_OUTPUT_DIR");
         }
         if (dir == null || dir.trim().isEmpty()) {
-            dir = System.getProperty("java.io.tmpdir") + File.separator + "baldr-output";
+            dir = new File(System.getProperty("java.io.tmpdir"), "baldr-output").getPath();
         }
         return dir;
     }
@@ -99,7 +99,7 @@ public class ProfilerCollector {
         ensureArthasStarted(pid);
 
         String timestamp = LocalDateTime.now().format(TIMESTAMP_FORMATTER);
-        String reportFile = String.format("%s/profile-%s.collapsed", REPORT_DIR, timestamp);
+        String reportFile = new File(REPORT_DIR, "profile-" + timestamp + ".collapsed").getAbsolutePath();
 
         File reportDir = new File(REPORT_DIR);
         if (!reportDir.exists() && !reportDir.mkdirs()) {

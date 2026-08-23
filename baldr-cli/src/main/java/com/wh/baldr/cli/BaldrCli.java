@@ -2,6 +2,7 @@ package com.wh.baldr.cli;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.Callable;
 
@@ -102,8 +103,9 @@ public class BaldrCli implements Callable<Integer> {
 
         // 5. 输出
         if (output != null && !output.trim().isEmpty()) {
-            Files.write(Paths.get(output), rendered.getBytes(StandardCharsets.UTF_8));
-            System.out.println("报告已生成: " + output);
+            Path outputPath = Paths.get(output);
+            Files.write(outputPath, rendered.getBytes(StandardCharsets.UTF_8));
+            System.out.println("报告已生成: " + outputPath.toAbsolutePath().normalize());
         } else {
             System.out.println(rendered);
         }
