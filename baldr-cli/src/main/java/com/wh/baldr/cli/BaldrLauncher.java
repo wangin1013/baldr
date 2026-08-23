@@ -107,7 +107,10 @@ final class BaldrLauncher {
 
         List<String> command = new ArrayList<>();
         command.add(javaBin);
-        if (isJdk9OrLater()) {
+        // 是否加 -XX:+EnableDynamicAgentLoading 以「实际执行子进程的那个 java」是否支持为准，
+        // 而非父进程的版本号——避免 java.home 指向的 JDK 与父进程版本判断错配时，
+        // 传入不被识别的 VM 参数（JDK 8 会因此直接启动失败）。
+        if (supportsVmOption(javaBin, "-XX:+EnableDynamicAgentLoading")) {
             command.add("-XX:+EnableDynamicAgentLoading");
         }
         command.add("-Xshare:off");
@@ -168,6 +171,49 @@ final class BaldrLauncher {
             }
         }
         return false;
+    }
+
+    /**
+     * 检测指定 java 可执行文件是否识别某个 VM 参数。
+     *
+     * <p>以 {@code javaBin <option> -version} 试运行为准：退出码为 0 表示支持。
+     * 这样加不加 {@code -XX:+EnableDynamicAgentLoading} 取决于「真正执行子进程的
+     * 那个 java」，而非父进程的版本号，可避免 JDK 版本错配时传入不被识别的参数
+     * 导致子进程启动失败（{@code Unrecognized VM option}）。</p>
+     *
+     * @param javaBin java 可执行文件绝对路径
+     * @param option  待检测的 VM 参数，如 {@code -XX:+EnableDynamicAgentLoading}
+     * @return true 表示该 java 识别此参数
+     */
+    private static boolean supportsVmOption(String javaBin, String option) {
+        try {
+            Process p = new ProcessBuilder(javaBin, option, "-version")
+                    .redirectErrorStream(true)
+                    .start();
+            // 读空子进程输出，避免管道缓冲区写满导致其阻塞
+            drain(p.getInputStream());
+            boolean finished = p.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
+            if (!finished) {
+                p.destroyForcibly();
+                return false;
+            }
+            return p.exitValue() == 0;
+        } catch (Exception e) {
+            // 探测失败时保守地视为不支持，宁可保留警告也不让子进程启动失败
+            return false;
+        }
+    }
+
+    /** 读空并丢弃一个输入流的全部内容。 */
+    private static void drain(InputStream in) {
+        try {
+            byte[] buf = new byte[1024];
+            while (in.read(buf) != -1) {
+                // 丢弃
+            }
+        } catch (IOException ignored) {
+            // 流结束/关闭，忽略
+        }
     }
 
     /**

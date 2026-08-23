@@ -26,9 +26,8 @@ public class AIDiagnosis {
 
     /** 系统提示词：角色设定 */
     public static final String SYSTEM_PROMPT =
-            "你是一位资深 Java 性能优化专家，拥有20年JVM性能调优经验。"
-                    + "请根据用户提供的arthas性能分析数据，给出具体、可落地的优化建议和代码修改方案。"
-                    + "返回的结果中，修改方案要表明修改点以及原因，输出结果是一个markdown的文档格式，要让人清楚的知道修改哪里，怎么改。";
+             "以下是用arthas使用profile命令后得到的系统运行数据，请根据数据，给出细致的、具体的、可落地的优化修改方案。"
+                    + "修改方案要进行原因分析，标明修改点以及修改方式，输出结果是一个markdown的文档格式，要让人清楚的知道修改哪里，怎么改。";
 
     /**
      * 构建诊断用户 Prompt（不含角色设定，角色设定见 {@link #SYSTEM_PROMPT}）。
@@ -88,8 +87,7 @@ public class AIDiagnosis {
         prompt.append("  * solution: 具体解决方案\n");
         prompt.append("  * codeExample: 优化后的代码示例（Java）\n");
         prompt.append("  * expectedGain: 预期性能提升（如\"减少50%CPU\"）\n");
-        prompt.append("- quickWins: 收益最大可以立即执行的最小改动有哪些（字符串数组）\n");
-        prompt.append("- jvmTuning: 如果有JVM参数调整建议，在此列出（字符串）\n");
+        prompt.append("- quickWins: 收益最大可以立即执行的最小改动有哪些\n");
 
         return prompt.toString();
     }
