@@ -9,18 +9,20 @@ Baldr 内嵌 Arthas + async-profiler，对目标 JVM 进行 CPU / 内存 / 锁�
 - **零安装采样**：内嵌 Arthas 与 async-profiler，无需在目标机预装任何工具。
 - **AI 智能诊断**：接入多家大模型，自动分析 CPU 热点、调用链，输出根因、优化方案与示例代码。
 - **多 Provider 架构**：内置 DeepSeek、豆包（火山方舟）、Claude（Anthropic）与本地私有模型，可通过参数自由切换。
-- **纯净输出**：自动屏蔽 JVM / async-profiler 的底层告警噪音（ByteBuddy 动态 Agent、CDS Sharing、framebuf 等）。
 - **优雅降级**：AI 调用失败时仍照常输出性能热点数据，不影响采样结果。
 - **单文件分发**：产物为一个 fat jar，`java -jar` 即可运行。
 
 ## 📦 下载安装
 
 前往 [Releases](https://github.com/wangin1013/baldr/releases) 页面下载最新的 `baldr.jar`。
-http://wangyijin9.cn/baldr.jar
+https://github.com/wangin1013/baldr/releases/latest/download/baldr.jar
 
 命令行下载
 ```bash
 curl -L -O http://wangyijin9.cn/baldr.jar
+```
+```bash
+curl -L -O https://github.com/wangin1013/baldr/releases/latest/download/baldr.jar
 ```
 直接使用IP下载
 ```bash
