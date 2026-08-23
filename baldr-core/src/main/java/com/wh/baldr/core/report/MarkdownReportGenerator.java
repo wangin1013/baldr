@@ -14,7 +14,7 @@ import com.wh.baldr.core.model.ProfileReport;
  */
 public class MarkdownReportGenerator implements ReportGenerator {
 
-    private static final int TOP_HOTSPOTS = 10;
+    private static final int TOP_HOTSPOTS = 20;
 
     @Override
     public String render(ProfileReport profile, DiagnosisResult diagnosis) {

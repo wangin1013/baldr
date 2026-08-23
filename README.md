@@ -2,13 +2,13 @@
 
 > 巴德尔（Baldr），北欧神话中的光明之神。一款面向 Java 应用的 **AI 驱动性能诊断工具**。
 
-Baldr 内嵌 Arthas + async-profiler，对目标 JVM 进行 CPU / 内存 / 锁采样，自动解析热点与调用路径，再交由大模型（DeepSeek / 豆包 等）生成结构化的性能优化建议，一键产出 Markdown 诊断报告。
+Baldr 内嵌 Arthas + async-profiler，对目标 JVM 进行 CPU / 内存 / 锁采样，自动解析热点与调用路径，再交由大模型（DeepSeek / 豆包 / Claude 等）生成结构化的性能优化建议，一键产出 Markdown 诊断报告。
 
 ## ✨ 特性
 
 - **零安装采样**：内嵌 Arthas 与 async-profiler，无需在目标机预装任何工具。
 - **AI 智能诊断**：接入多家大模型，自动分析 CPU 热点、调用链，输出根因、优化方案与示例代码。
-- **多 Provider 架构**：内置 DeepSeek、豆包（火山方舟）与本地私有模型，可通过参数自由切换。
+- **多 Provider 架构**：内置 DeepSeek、豆包（火山方舟）、Claude（Anthropic）与本地私有模型，可通过参数自由切换。
 - **纯净输出**：自动屏蔽 JVM / async-profiler 的底层告警噪音（ByteBuddy 动态 Agent、CDS Sharing、framebuf 等）。
 - **优雅降级**：AI 调用失败时仍照常输出性能热点数据，不影响采样结果。
 - **单文件分发**：产物为一个 fat jar，`java -jar` 即可运行。
@@ -34,7 +34,7 @@ curl -L -O https://github.com/wangin1013/baldr/releases/latest/download/SHA256SU
 sha256sum -c SHA256SUMS.txt
 ```
 
-**运行环境**：JDK 8 及以上（推荐 JDK 11+）。
+**运行环境**：JDK 8 及以上。
 
 ## 🚀 快速开始
 
@@ -60,7 +60,8 @@ java -jar baldr.jar --pid <PID> --duration 60 --output report.md
 | `--duration` | `-d` | 采样时长（秒） | `30` |
 | `--event` | `-e` | 采样事件：`cpu` / `alloc` / `lock` | `cpu` |
 | `--output` | `-o` | 报告输出文件路径，默认打印到控制台 | - |
-| `--provider` | | 云端大模型：`deepseek` / `doubao` | `deepseek` |
+| `--use` | | 预设组合，一次指定 provider+model：`claude-opus` / `claude-sonnet` / `claude-haiku` / `deepseek` / `doubao` | - |
+| `--provider` | | 云端大模型：`deepseek` / `doubao` / `claude` | `deepseek` |
 | `--api-key` | | API Key，默认读取对应 provider 的环境变量 | - |
 | `--endpoint` | | 自定义 API endpoint | provider 内置 |
 | `--model` | | 模型名 | provider 内置 |
@@ -70,24 +71,42 @@ java -jar baldr.jar --pid <PID> --duration 60 --output report.md
 
 ## 🤖 大模型 Provider
 
-Baldr 采用多 Provider 架构，各厂商均为 OpenAI 兼容接口。API Key 优先取 `--api-key` 参数，否则读取对应环境变量。
+Baldr 采用多 Provider 架构。DeepSeek、豆包等为 OpenAI 兼容接口，Claude 为 Anthropic Messages API，均由统一抽象屏蔽差异。API Key 优先取 `--api-key` 参数，否则读取对应环境变量。
 
 ### DeepSeek（默认）
 
 ```bash
 export DEEPSEEK_API_KEY=sk-xxxx
 java -jar baldr.jar --pid <PID>
-# 等价于 --provider deepseek --model deepseek-v4-pro
+# 不带参数 = provider 内置默认模型 deepseek-v4-pro
+# 用 --use deepseek 则指向推理旗舰 deepseek-reasoner（更适合代码/性能分析）：
+java -jar baldr.jar --pid <PID> --use deepseek
 ```
 
 ### 豆包 / 火山方舟
 
 ```bash
 export ARK_API_KEY=xxxx
-java -jar baldr.jar --pid <PID> --provider doubao
-# 默认模型 doubao-pro-32k，也可用推理接入点 ID：
+# --use doubao 指向长上下文旗舰 doubao-pro-256k（适合分析大段调用栈）：
+java -jar baldr.jar --pid <PID> --use doubao
+# 也可用 --provider doubao 走内置默认 doubao-pro-32k，或指定推理接入点 ID：
 java -jar baldr.jar --pid <PID> --provider doubao --model ep-xxxxxxxx
 ```
+
+### Claude / Anthropic
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-xxxx
+java -jar baldr.jar --pid <PID> --provider claude
+# 默认模型 claude-sonnet-4-20250514。用 --use 预设可省去 --provider/--model：
+java -jar baldr.jar --pid <PID> --use claude-opus     # opus 高能力款
+java -jar baldr.jar --pid <PID> --use claude-sonnet   # sonnet 均衡款
+java -jar baldr.jar --pid <PID> --use claude-haiku    # haiku 轻量快速款
+```
+
+> `--use` 是「provider + model」的快捷预设，一次搞定，无需再写冗长的
+> `--provider claude --model claude-opus-4-20250514`。若同时显式指定
+> `--provider`/`--model`，则以显式值为准。
 
 ### 本地私有模型（离线 / 内网）
 
@@ -186,7 +205,7 @@ baldr/
 │       ├── collector/             # 性能采样收集器
 │       ├── parser/                # collapsed 格式解析、热点/调用树构建
 │       ├── analyzer/              # AI 诊断
-│       │   └── provider/          # 多大模型 Provider（DeepSeek/豆包/本地）
+│       │   └── provider/          # 多大模型 Provider（DeepSeek/豆包/Claude/本地）
 │       ├── report/                # Markdown 报告生成
 │       └── model/                 # 数据模型
 ├── baldr-cli/                     # 命令行入口（打包为 fat jar）
@@ -198,7 +217,6 @@ baldr/
 
 - Baldr 采用嵌入式 Arthas，attach 到**当前 JVM**，因此 async-profiler 实际采集的是运行 Baldr 的进程；`--pid` 主要用于校验与记录。
 - 报告默认写入 `/tmp/baldr-ai/` 目录。
-- JDK 21+ 首次动态加载 Agent 会有告警，Baldr 已通过进程自举与输出过滤自动屏蔽，无需手动加 JVM 参数。
 
 ## 📜 License
 

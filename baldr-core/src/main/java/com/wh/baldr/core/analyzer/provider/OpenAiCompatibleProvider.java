@@ -75,6 +75,11 @@ public abstract class OpenAiCompatibleProvider implements LLMProvider {
     /** 品牌名称，用于错误提示文案，如 "DeepSeek"、"豆包"。 */
     protected abstract String brand();
 
+    /** 实际生效的模型名（构造时已回退默认值），供子类构造请求体使用。 */
+    protected String model() {
+        return model;
+    }
+
     /**
      * 是否强制要求 API Key。默认 true；本地私有服务（无需鉴权）可覆写为 false。
      *
@@ -82,6 +87,19 @@ public abstract class OpenAiCompatibleProvider implements LLMProvider {
      */
     protected boolean requireApiKey() {
         return true;
+    }
+
+    /**
+     * 应用鉴权请求头。默认使用 OpenAI 规范的 {@code Authorization: Bearer <key>}。
+     * 非 Bearer 鉴权的厂商（如 Anthropic 的 {@code x-api-key}）可覆写此方法。
+     *
+     * @param conn   已建立的连接
+     * @param apiKey 处理后的 API Key（可能为空字符串）
+     */
+    protected void applyAuthHeaders(HttpURLConnection conn, String apiKey) {
+        if (apiKey != null && !apiKey.isEmpty()) {
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+        }
     }
 
     // ---- 通用实现 ----
@@ -135,9 +153,7 @@ public abstract class OpenAiCompatibleProvider implements LLMProvider {
             conn.setConnectTimeout(connectTimeoutMs);
             conn.setReadTimeout(readTimeoutMs);
             conn.setRequestProperty("Content-Type", "application/json");
-            if (apiKey != null && !apiKey.isEmpty()) {
-                conn.setRequestProperty("Authorization", "Bearer " + apiKey);
-            }
+            applyAuthHeaders(conn, apiKey);
 
             try (OutputStream os = conn.getOutputStream()) {
                 os.write(payload.getBytes(StandardCharsets.UTF_8));

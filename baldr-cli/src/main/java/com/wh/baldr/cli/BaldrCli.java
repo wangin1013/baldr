@@ -6,6 +6,7 @@ import java.nio.file.Paths;
 import java.util.concurrent.Callable;
 
 import com.wh.baldr.core.analyzer.AIDiagnosis;
+import com.wh.baldr.core.analyzer.provider.ModelPreset;
 import com.wh.baldr.core.collector.ProfilerCollector;
 import com.wh.baldr.core.model.DiagnosisResult;
 import com.wh.baldr.core.model.ProfileReport;
@@ -45,8 +46,11 @@ public class BaldrCli implements Callable<Integer> {
     @Option(names = {"--local"}, description = "使用本地私有模型（Ollama/vLLM 等 OpenAI 兼容服务）；配合 --endpoint --model 使用")
     private boolean useLocal = false;
 
-    @Option(names = {"--provider"}, description = "云端大模型 provider：deepseek / doubao，默认 deepseek")
+    @Option(names = {"--provider"}, description = "云端大模型 provider：deepseek / doubao / claude，默认 deepseek")
     private String provider;
+
+    @Option(names = {"--use"}, description = "预设组合（一次指定 provider+model）：claude-opus / claude-sonnet / claude-haiku / deepseek / doubao；等价于分别写 --provider 与 --model。显式 --provider/--model 优先级更高")
+    private String preset;
 
     @Option(names = {"--api-key"}, description = "API Key，默认读取对应 provider 的环境变量（如 DEEPSEEK_API_KEY / ARK_API_KEY）")
     private String apiKey;
@@ -72,6 +76,17 @@ public class BaldrCli implements Callable<Integer> {
         ProfileReport report = parser.parse(content);
 
         // 3. AI 分析
+        // 展开预设：--use 提供 provider/model 默认值，显式 --provider/--model 优先
+        if (preset != null && !preset.trim().isEmpty()) {
+            ModelPreset p = ModelPreset.fromAlias(preset);
+            if (provider == null || provider.trim().isEmpty()) {
+                provider = p.provider();
+            }
+            if ((model == null || model.trim().isEmpty()) && p.model() != null) {
+                model = p.model();
+            }
+        }
+
         String prompt = AIDiagnosis.buildPrompt(report, null);
         DiagnosisResult result;
         try {

@@ -51,13 +51,15 @@ public final class LLMProviderFactory {
                 return new DeepSeekProvider(apiKey, endpoint, model, connectTimeoutMs, readTimeoutMs);
             case DoubaoProvider.NAME:
                 return new DoubaoProvider(apiKey, endpoint, model, connectTimeoutMs, readTimeoutMs);
+            case ClaudeProvider.NAME:
+                return new ClaudeProvider(apiKey, endpoint, model, connectTimeoutMs, readTimeoutMs);
             case LocalProvider.NAME:
                 return new LocalProvider(apiKey, endpoint, model, connectTimeoutMs, readTimeoutMs);
             default:
                 throw new IllegalArgumentException(
                         "不支持的大模型 provider: " + provider
                                 + "，可选值: " + DeepSeekProvider.NAME + " / " + DoubaoProvider.NAME
-                                + " / " + LocalProvider.NAME);
+                                + " / " + ClaudeProvider.NAME + " / " + LocalProvider.NAME);
         }
     }
 }

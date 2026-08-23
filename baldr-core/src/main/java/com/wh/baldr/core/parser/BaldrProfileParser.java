@@ -117,6 +117,43 @@ public class BaldrProfileParser {
      * 解析 collapsed（折叠堆栈）格式。
      * 每行形如 {@code frame1;frame2;frame3 123}，按顶层帧聚合采样数。
      */
+    /**
+     * 判断一个栈帧是否为 Java 方法帧。
+     * async-profiler collapsed 中 Java 帧形如 {@code com/foo/Bar.method} 或 {@code com.foo.Bar.method}；
+     * native/内核帧形如 {@code __psynch_cvwait}、{@code CompressedWriteStream::CompressedWriteStream(int)}、
+     * {@code write}。判定规则：含 C++ 作用域符 {@code ::} 视为 native；否则要求含类型分隔（{@code /} 或 {@code .}）
+     * 且不以下划线开头（排除 libc/内核符号）。
+     */
+    private boolean isJavaFrame(String frame) {
+        if (frame == null || frame.isEmpty()) {
+            return false;
+        }
+        if (frame.contains("::")) {
+            return false;
+        }
+        if (frame.startsWith("_")) {
+            return false;
+        }
+        return frame.indexOf('/') >= 0 || frame.indexOf('.') >= 0;
+    }
+
+    /**
+     * 从栈(栈底→栈顶)中自顶向下取最近的一个 Java 帧作为热点方法。
+     * 采样时刻栈顶可能停在 native 调用(如锁等待/系统调用)，此时应归因到调用它的 Java 方法，
+     * 而非丢弃整个样本，以保证热点百分比不失真。
+     *
+     * @param frames 分号切分后的栈帧数组(栈底→栈顶)
+     * @return 栈顶方向最近的 Java 帧；若整条栈无 Java 帧返回 {@code null}
+     */
+    private String topJavaFrame(String[] frames) {
+        for (int i = frames.length - 1; i >= 0; i--) {
+            if (isJavaFrame(frames[i])) {
+                return frames[i];
+            }
+        }
+        return null;
+    }
+
     private List<Hotspot> parseCollapsed(List<String> lines) {
         // 按方法名聚合采样数
         Map<String, Long> methodSamples = new LinkedHashMap<>();
@@ -141,13 +178,14 @@ public class BaldrProfileParser {
                 continue;
             }
 
-            // 取栈顶帧（最后一帧）作为热点方法。
-            // collapsed 格式堆栈自栈底到栈顶排列，最后一帧才是采样时刻实际执行的方法，
-            // 反映真实的 CPU self-time；若取第一帧只会得到 thread_start 等线程入口，无意义。
-            String topFrame = stackPart;
-            int semiIdx = stackPart.lastIndexOf(';');
-            if (semiIdx >= 0 && semiIdx < stackPart.length() - 1) {
-                topFrame = stackPart.substring(semiIdx + 1);
+            // 取栈顶方向最近的 Java 帧作为热点方法。
+            // collapsed 堆栈自栈底到栈顶排列；采样时刻栈顶可能停在 native 帧(锁等待/系统调用/JIT)，
+            // 此时归因到调用它的最近 Java 方法，既反映真实 self-time，又避免 native 符号混入火焰图。
+            String[] frames = stackPart.split(";", -1);
+            String topFrame = topJavaFrame(frames);
+            if (topFrame == null) {
+                // 整条栈无 Java 帧(纯 native 线程)，跳过，不计入 Java 热点
+                continue;
             }
 
             methodSamples.merge(topFrame, count, Long::sum);
@@ -294,6 +332,11 @@ public class BaldrProfileParser {
             StringBuilder pathKey = new StringBuilder();
             for (String frame : frames) {
                 if (frame.isEmpty()) {
+                    continue;
+                }
+                // 只保留 Java 帧，跳过 native/内核帧(如 __psynch_cvwait、CppClass::method)，
+                // 使 HTML 火焰图仅呈现 Java 调用路径；跳过后 Java 父子帧仍直接相连。
+                if (!isJavaFrame(frame)) {
                     continue;
                 }
                 if (pathKey.length() > 0) {

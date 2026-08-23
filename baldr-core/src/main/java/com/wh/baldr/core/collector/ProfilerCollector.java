@@ -79,14 +79,16 @@ public class ProfilerCollector {
         }
 
         // 1. 启动采样
-        executeCommand("profiler start --event " + event);
-        log.info("Profiler started for pid={}, event={}", pid, event);
+        String profilerEvent = mapEvent(event);
+        executeCommand("profiler start --event " + profilerEvent);
+        log.info("Profiler started for pid={}, event={} (profiler event={})", pid, event, profilerEvent);
 
         // 2. 等待采样
         TimeUnit.SECONDS.sleep(duration);
 
         // 3. 停止并生成报告
-        executeCommand("profiler stop --format collapsed --file " + reportFile);
+        // --cstack no：不采集 C 栈，collapsed 只保留 Java 帧，避免 native/内核符号混入火焰图
+        executeCommand("profiler stop --format collapsed --cstack no --file " + reportFile);
         log.info("Profile report generated: {}", reportFile);
 
         return reportFile;
@@ -119,6 +121,26 @@ public class ProfilerCollector {
             throw new IllegalArgumentException("Unsupported event: " + event
                     + ", supported: " + SUPPORTED_EVENTS);
         }
+    }
+
+    /**
+     * 将上层语义事件映射为 async-profiler 实际使用的事件。
+     *
+     * <p>CPU 采样刻意使用 {@code itimer} 而非{@code cpu}：{@code cpu} 依赖
+     * Linux perf_events 内核 PMU，采集完整 native 栈，在未开启
+     * {@code -XX:+PreserveFramePointer} 或缺少 perf 权限（容器内常见）时，
+     * 无法还原 Java 栈，导致 collapsed 输出大量 C++/内核符号。
+     * {@code itimer} 基于 SIGPROF + AsyncGetCallTrace，仅遍历 JVM 提供的
+     * Java 栈，输出纯 Java 方法，且不依赖 perf 权限。</p>
+     *
+     * @param event 上层事件（cpu / alloc / lock）
+     * @return async-profiler 实际事件名
+     */
+    private String mapEvent(String event) {
+        if ("cpu".equals(event)) {
+            return "itimer";
+        }
+        return event;
     }
 
     /**
