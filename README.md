@@ -96,8 +96,8 @@ java -jar baldr.jar --pid <PID> --use deepseek
 export ARK_API_KEY=xxxx
 # --use doubao 指向长上下文旗舰 doubao-pro-256k（适合分析大段调用栈）：
 java -jar baldr.jar --pid <PID> --use doubao
-# 也可用 --provider doubao 走内置默认 doubao-pro-32k，或指定推理接入点 ID：
-java -jar baldr.jar --pid <PID> --provider doubao --model ep-xxxxxxxx
+# 也可用 --provider doubao 走内置默认 deepseek-v4-pro-ga-260813，或指定模型
+java -jar baldr.jar --pid <PID> --provider doubao --model  deepseek-v4-pro-ga-260813
 ```
 
 ### Claude / Anthropic

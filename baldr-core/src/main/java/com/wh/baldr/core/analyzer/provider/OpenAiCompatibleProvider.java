@@ -90,6 +90,20 @@ public abstract class OpenAiCompatibleProvider implements LLMProvider {
     }
 
     /**
+     * 是否在请求体中启用 OpenAI 的 JSON 输出模式
+     * （{@code "response_format":{"type":"json_object"}}）。
+     *
+     * <p>默认 true。但部分厂商/模型（如火山方舟上的某些 deepseek 模型）
+     * 不支持该字段，会直接返回 400；这类 provider 可覆写为 false，
+     * 改由 system prompt 约束模型输出 JSON。</p>
+     *
+     * @return 是否启用 JSON 输出模式
+     */
+    protected boolean supportsJsonMode() {
+        return true;
+    }
+
+    /**
      * 应用鉴权请求头。默认使用 OpenAI 规范的 {@code Authorization: Bearer <key>}。
      * 非 Bearer 鉴权的厂商（如 Anthropic 的 {@code x-api-key}）可覆写此方法。
      *
@@ -119,9 +133,11 @@ public abstract class OpenAiCompatibleProvider implements LLMProvider {
             ObjectNode root = MAPPER.createObjectNode();
             root.put("model", model);
             root.put("stream", false);
-            ObjectNode responseFormat = MAPPER.createObjectNode();
-            responseFormat.put("type", "json_object");
-            root.set("response_format", responseFormat);
+            if (supportsJsonMode()) {
+                ObjectNode responseFormat = MAPPER.createObjectNode();
+                responseFormat.put("type", "json_object");
+                root.set("response_format", responseFormat);
+            }
 
             ArrayNode messages = MAPPER.createArrayNode();
             if (systemPrompt != null && !systemPrompt.isEmpty()) {
@@ -238,6 +254,10 @@ public abstract class OpenAiCompatibleProvider implements LLMProvider {
 
     /**
      * 从 API 响应中提取 {@code choices[0].message.content}。
+     *
+     * <p>推理型模型（如 deepseek-reasoner 系）可能把正文放在 {@code content}，
+     * 而思考过程放在 {@code reasoning_content}；个别情况下 {@code content} 为空。
+     * 为稳健起见，{@code content} 缺失或为空白时回退到 {@code reasoning_content}。</p>
      */
     protected String extractContent(String responseBody) throws IOException {
         JsonNode root = MAPPER.readTree(responseBody);
@@ -245,10 +265,22 @@ public abstract class OpenAiCompatibleProvider implements LLMProvider {
         if (!choices.isArray() || choices.isEmpty()) {
             throw new IOException(brand() + " response has no choices: " + responseBody);
         }
-        JsonNode content = choices.get(0).path("message").path("content");
-        if (content.isMissingNode() || content.isNull()) {
-            throw new IOException(brand() + " response missing message content: " + responseBody);
+        JsonNode message = choices.get(0).path("message");
+        JsonNode content = message.path("content");
+        if (!content.isMissingNode() && !content.isNull()) {
+            String text = content.asText();
+            if (text != null && !text.trim().isEmpty()) {
+                return text;
+            }
         }
-        return content.asText();
+        // content 为空时回退到 reasoning_content
+        JsonNode reasoning = message.path("reasoning_content");
+        if (!reasoning.isMissingNode() && !reasoning.isNull()) {
+            String text = reasoning.asText();
+            if (text != null && !text.trim().isEmpty()) {
+                return text;
+            }
+        }
+        throw new IOException(brand() + " response missing message content: " + responseBody);
     }
 }
