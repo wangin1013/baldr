@@ -22,7 +22,10 @@ http://wangyijin9.cn/baldr.jar
 ```bash
 curl -L -O http://wangyijin9.cn/baldr.jar
 ```
-
+直接使用IP下载
+```bash
+curl -L -O http://62.234.92.218/baldr.jar
+```
 
 
 ```bash
@@ -78,6 +81,8 @@ Baldr 采用多 Provider 架构。DeepSeek、豆包等为 OpenAI 兼容接口，
 ```bash
 export DEEPSEEK_API_KEY=sk-xxxx
 java -jar baldr.jar --pid <PID>
+# 命令行带参数方式，注意：共用环境容易泄漏api—key，建议申请一次性KEY值使用
+java -jar baldr.jar --pid 1 --api-key sk-XXXXXX
 # 不带参数 = provider 内置默认模型 deepseek-v4-pro
 # 用 --use deepseek 则指向推理旗舰 deepseek-reasoner（更适合代码/性能分析）：
 java -jar baldr.jar --pid <PID> --use deepseek

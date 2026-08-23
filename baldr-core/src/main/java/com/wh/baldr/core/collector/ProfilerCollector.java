@@ -42,8 +42,24 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ProfilerCollector {
 
-    /** 报告输出目录 */
-    private static final String REPORT_DIR = "/tmp/baldr-ai";
+    /**
+     * 统一输出目录：采样报告与 Arthas/async-profiler 的中间产物都归到这里，
+     * 避免在工作目录另外生成 {@code arthas-output}。
+     *
+     * <p>可用系统属性 {@code -Dbaldr.outputDir} 或环境变量 {@code BALDR_OUTPUT_DIR} 覆盖。</p>
+     */
+    private static final String REPORT_DIR = resolveOutputDir();
+
+    private static String resolveOutputDir() {
+        String dir = System.getProperty("baldr.outputDir");
+        if (dir == null || dir.trim().isEmpty()) {
+            dir = System.getenv("BALDR_OUTPUT_DIR");
+        }
+        if (dir == null || dir.trim().isEmpty()) {
+            dir = System.getProperty("java.io.tmpdir") + File.separator + "baldr-output";
+        }
+        return dir;
+    }
 
     /** Arthas HTTP API 端口 */
     private static final int HTTP_PORT = 8563;
@@ -193,6 +209,8 @@ public class ProfilerCollector {
         configMap.put("arthas.telnetPort", String.valueOf(TELNET_PORT));
         configMap.put("arthas.httpPort", String.valueOf(HTTP_PORT));
         configMap.put("arthas.ip", BIND_IP);
+        // 让 Arthas/async-profiler 的默认输出也落到统一目录，避免另建 arthas-output
+        configMap.put("arthas.outputPath", REPORT_DIR);
 
         if (arthasHome != null) {
             // 使用内置发行包，运行期零下载
@@ -214,7 +232,7 @@ public class ProfilerCollector {
                     "Cross-process attach requires bundled Arthas home, but none resolved. "
                             + "Set -Dbaldr.arthasHome or BALDR_ARTHAS_HOME.");
         }
-        ExternalArthasAttacher.attach(pid, arthasHome, TELNET_PORT, HTTP_PORT, BIND_IP);
+        ExternalArthasAttacher.attach(pid, arthasHome, TELNET_PORT, HTTP_PORT, BIND_IP, REPORT_DIR);
         log.info("Arthas attached to external pid={} with home: {}", pid, arthasHome);
     }
 
