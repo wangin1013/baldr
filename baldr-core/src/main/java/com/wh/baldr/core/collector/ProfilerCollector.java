@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.lang.management.ManagementFactory;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -16,16 +17,24 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import com.wh.baldr.core.arthas.ArthasAgent;
+import com.wh.baldr.core.arthas.ExternalArthasAttacher;
 
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 基于嵌入式 Arthas 的性能采样收集器。
- * 通过 arthas-agent-attach 将 Arthas 加载进当前 JVM，暴露 HTTP API，
- * 再经 profiler 命令进行采样并生成报告，无需外部安装 Arthas。
+ * 基于 Arthas 的性能采样收集器。
  *
- * <p>注意：async-profiler 只能对 Arthas agent 所在的 JVM 采样，
- * 因此嵌入式方式采集的始终是「当前进程」；传入的 pid 仅用于校验/记录。</p>
+ * <p>按目标 pid 自动分流：</p>
+ * <ul>
+ *   <li><b>当前进程</b>（pid == 本 JVM）：走内嵌 {@link ArthasAgent}，
+ *       用 {@code ByteBuddyAgent.install()} 把 Arthas 加载进本 JVM。</li>
+ *   <li><b>外部进程</b>（pid 为其它业务 JVM）：走
+ *       {@link ExternalArthasAttacher}，用 JVM Attach API 把 arthas-agent.jar
+ *       注入目标进程，由其在目标进程内暴露 HTTP API，从而真正采样业务进程。</li>
+ * </ul>
+ *
+ * <p>两种方式最终都通过同一 HTTP API（{@code executeCommand}）下发 profiler
+ * 命令，采样逻辑完全一致。</p>
  *
  * @author rubant
  * @date 2026-08-14
@@ -42,6 +51,9 @@ public class ProfilerCollector {
     /** Arthas telnet 端口 */
     private static final int TELNET_PORT = 3658;
 
+    /** 绑定 IP */
+    private static final String BIND_IP = "127.0.0.1";
+
     /** 异常触发采样时长（秒） */
     private static final int EXCEPTION_SAMPLE_DURATION = 30;
 
@@ -55,12 +67,12 @@ public class ProfilerCollector {
     /** 保证 Arthas 只初始化一次 */
     private static volatile boolean arthasStarted = false;
 
-    private final String apiUrl = "http://127.0.0.1:" + HTTP_PORT + "/api";
+    private final String apiUrl = "http://" + BIND_IP + ":" + HTTP_PORT + "/api";
 
     /**
      * 采集并生成报告。
      *
-     * @param pid      目标进程 ID（嵌入式下应为当前进程），必须大于 0
+     * @param pid      目标进程 ID，必须大于 0
      * @param duration 采样时长（秒），必须大于 0
      * @param event    事件类型：cpu / alloc / lock
      * @return 报告文件路径
@@ -68,7 +80,7 @@ public class ProfilerCollector {
      */
     public String collect(int pid, int duration, String event) throws Exception {
         validate(pid, duration, event);
-        ensureArthasStarted();
+        ensureArthasStarted(pid);
 
         String timestamp = LocalDateTime.now().format(TIMESTAMP_FORMATTER);
         String reportFile = String.format("%s/profile-%s.collapsed", REPORT_DIR, timestamp);
@@ -144,9 +156,14 @@ public class ProfilerCollector {
     }
 
     /**
-     * 幂等地将 Arthas attach 到当前 JVM 并启动 HTTP API。
+     * 幂等地保证 Arthas 已在「目标进程」内启动并暴露 HTTP API。
+     *
+     * <p>若目标即当前进程，走内嵌 attach；否则用 JVM Attach API 把
+     * arthas-agent.jar 注入目标进程。</p>
+     *
+     * @param pid 目标进程 ID
      */
-    private void ensureArthasStarted() {
+    private void ensureArthasStarted(int pid) throws Exception {
         if (arthasStarted) {
             return;
         }
@@ -154,24 +171,71 @@ public class ProfilerCollector {
             if (arthasStarted) {
                 return;
             }
-            java.util.Map<String, String> configMap = new java.util.HashMap<>();
-            configMap.put("arthas.telnetPort", String.valueOf(TELNET_PORT));
-            configMap.put("arthas.httpPort", String.valueOf(HTTP_PORT));
-            configMap.put("arthas.ip", "127.0.0.1");
 
             String arthasHome = resolveArthasHome();
-            if (arthasHome != null) {
-                // 使用内置发行包，运行期零下载
-                new ArthasAgent(configMap, arthasHome, false, null).init();
-                log.info("Arthas attached with bundled home: {}", arthasHome);
+
+            if (isCurrentProcess(pid)) {
+                startEmbedded(arthasHome);
             } else {
-                // 回退：由 Arthas 自行下载发行包
-                ArthasAgent.attach(configMap);
-                log.info("Arthas attached (network download fallback)");
+                startExternal(pid, arthasHome);
             }
+
             arthasStarted = true;
             log.info("Arthas ready, httpPort={}, telnetPort={}", HTTP_PORT, TELNET_PORT);
         }
+    }
+
+    /**
+     * 内嵌启动：把 Arthas 加载进当前 JVM。
+     */
+    private void startEmbedded(String arthasHome) {
+        java.util.Map<String, String> configMap = new java.util.HashMap<>();
+        configMap.put("arthas.telnetPort", String.valueOf(TELNET_PORT));
+        configMap.put("arthas.httpPort", String.valueOf(HTTP_PORT));
+        configMap.put("arthas.ip", BIND_IP);
+
+        if (arthasHome != null) {
+            // 使用内置发行包，运行期零下载
+            new ArthasAgent(configMap, arthasHome, false, null).init();
+            log.info("Arthas attached to current JVM with bundled home: {}", arthasHome);
+        } else {
+            // 回退：由 Arthas 自行下载发行包
+            ArthasAgent.attach(configMap);
+            log.info("Arthas attached to current JVM (network download fallback)");
+        }
+    }
+
+    /**
+     * 跨进程启动：把 arthas-agent.jar 注入目标业务进程。
+     */
+    private void startExternal(int pid, String arthasHome) throws Exception {
+        if (arthasHome == null) {
+            throw new IllegalStateException(
+                    "Cross-process attach requires bundled Arthas home, but none resolved. "
+                            + "Set -Dbaldr.arthasHome or BALDR_ARTHAS_HOME.");
+        }
+        ExternalArthasAttacher.attach(pid, arthasHome, TELNET_PORT, HTTP_PORT, BIND_IP);
+        log.info("Arthas attached to external pid={} with home: {}", pid, arthasHome);
+    }
+
+    /**
+     * 判断给定 pid 是否为当前 JVM 进程。
+     *
+     * <p>为兼容 JDK 8，从 {@link java.lang.management.RuntimeMXBean} 的
+     * name（格式 {@code pid@host}）解析当前进程 pid。</p>
+     */
+    private boolean isCurrentProcess(int pid) {
+        long current = -1L;
+        String name = ManagementFactory.getRuntimeMXBean().getName();
+        int at = name.indexOf('@');
+        if (at > 0) {
+            try {
+                current = Long.parseLong(name.substring(0, at));
+            } catch (NumberFormatException ignore) {
+                current = -1L;
+            }
+        }
+        return current == pid;
     }
 
     /**
@@ -249,7 +313,7 @@ public class ProfilerCollector {
     }
 
     /**
-     * 将 classpath 下 {@code baldr-arthas/arthas-bin/} 内置发行包释放到临时目录。
+     * 将 classpath 下 {@code baldr-arthas/arthas-bin.zip} 内置发行包释放到临时目录。
      *
      * @return 释放后的 arthas home 绝对路径；找不到内置资源时返回 null
      */

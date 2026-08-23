@@ -118,11 +118,29 @@ public class BaldrProfileParser {
      * 每行形如 {@code frame1;frame2;frame3 123}，按顶层帧聚合采样数。
      */
     /**
-     * 判断一个栈帧是否为 Java 方法帧。
+     * profiler 采样噪声：Arthas agent 自身、采样器、JVM/JDK 内部实现等包前缀。
+     * 嵌入式 Arthas 会对「当前整个 JVM」采样，采样动作本身发生在 Arthas 处理 HTTP/profiler
+     * 命令期间，因此这些栈会大量混入结果。它们不是用户业务代码，需从热点/火焰图中剔除，
+     * 否则 AI 会误把 Arthas/fastjson 序列化当成业务瓶颈。
+     */
+    private static final String[] NOISE_PREFIXES = {
+            "com/alibaba/arthas/", "com/taobao/arthas/", "com.alibaba.arthas.", "com.taobao.arthas.",
+            "com/wh/baldr/", "com.wh.baldr.",
+            "one/profiler/", "one.profiler.",
+    };
+
+    /**
+     * 判断一个栈帧是否为「用户业务 Java 方法帧」。
      * async-profiler collapsed 中 Java 帧形如 {@code com/foo/Bar.method} 或 {@code com.foo.Bar.method}；
-     * native/内核帧形如 {@code __psynch_cvwait}、{@code CompressedWriteStream::CompressedWriteStream(int)}、
-     * {@code write}。判定规则：含 C++ 作用域符 {@code ::} 视为 native；否则要求含类型分隔（{@code /} 或 {@code .}）
-     * 且不以下划线开头（排除 libc/内核符号）。
+     * native/库帧形如 {@code __psynch_cvwait}、{@code CppClass::method}、{@code /lib/ld-musl-x86_64.so.1}、
+     * {@code write}。判定规则：
+     * <ul>
+     *   <li>含 C++ 作用域符 {@code ::} → native</li>
+     *   <li>以 {@code /} 开头（如 {@code /lib/...so}）或含 {@code .so} → 动态库</li>
+     *   <li>以下划线开头 → libc/内核符号</li>
+     *   <li>必须同时含类型/方法分隔（{@code /} 或 {@code .} 之一形成的 {@code 包.类.方法}）——Java 方法帧必含 {@code .}</li>
+     *   <li>命中 {@link #NOISE_PREFIXES}（Arthas/采样器/Baldr 自身）→ 剔除</li>
+     * </ul>
      */
     private boolean isJavaFrame(String frame) {
         if (frame == null || frame.isEmpty()) {
@@ -131,10 +149,22 @@ public class BaldrProfileParser {
         if (frame.contains("::")) {
             return false;
         }
-        if (frame.startsWith("_")) {
+        if (frame.startsWith("_") || frame.startsWith("/")) {
             return false;
         }
-        return frame.indexOf('/') >= 0 || frame.indexOf('.') >= 0;
+        if (frame.contains(".so")) {
+            return false;
+        }
+        // Java 方法帧必然含 '.'（至少 类.方法）。仅含 '/' 而无 '.' 的多为路径/库名。
+        if (frame.indexOf('.') < 0) {
+            return false;
+        }
+        for (String p : NOISE_PREFIXES) {
+            if (frame.startsWith(p)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
